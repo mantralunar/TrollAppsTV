@@ -7,6 +7,8 @@
 
 #import <Foundation/Foundation.h>
 #import <spawn.h>
+#import <sys/wait.h>
+#import <errno.h>
 #import "TrollAppsTV-Bridging-Header.h"
 #import "CoreServices.h"
 
@@ -49,6 +51,7 @@ int spawnRoot(NSString* path, NSArray* args)
     int status = -200;
     int spawnError = posix_spawn(&task_pid, [path UTF8String], &action, &attr, (char* const*)argsC, NULL);
     posix_spawnattr_destroy(&attr);
+    posix_spawn_file_actions_destroy(&action);
     for (NSUInteger i = 0; i < argCount; i++)
     {
         free(argsC[i]);
@@ -61,16 +64,12 @@ int spawnRoot(NSString* path, NSArray* args)
         return spawnError;
     }
 
-    do
-    {
-        if (waitpid(task_pid, &status, 0) != -1) {
-            NSLog(@"Child status %d", WEXITSTATUS(status));
-        } else
-        {
-            perror("waitpid");
-            return -222;
-        }
-    } while (!WIFEXITED(status) && !WIFSIGNALED(status));
-    
+    while (waitpid(task_pid, &status, 0) == -1) {
+        if (errno == EINTR) continue;
+        perror("waitpid");
+        return -222;
+    }
+    if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+    if (!WIFEXITED(status)) return -222;
     return WEXITSTATUS(status);
 }

@@ -9,10 +9,8 @@ import SwiftUI
 
 struct AppDetailView: View {
     let app: App
-    @State private var isOwned: Bool = false // State to manage "GET" button text
-    @State private var showingAlert = false
-    @State private var downloadAlertMessage: String = ""
-    
+    @ObservedObject private var transfer = DownloadState.shared
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading) {
@@ -57,79 +55,30 @@ struct AppDetailView: View {
                         .padding(.top, 10)
 
                     HStack(alignment: .top) {
-                        if(app.bundleName != "TrollAppsTV.app") {   //  app is NOT trollapps
-                            if(isAppInstalled(bundleName: app.bundleName)) {
-                                Button("OPEN") {
-                                    if(openApplicationWithBundleID(app.bundleIdentifier)) {
-                                        print("OPENING APP")
+                        if app.bundleName != "TrollAppsTV.app" {
+                            if isAppInstalled(bundleName: app.bundleName) {
+                                Button("OPEN") { _ = openApplicationWithBundleID(app.bundleIdentifier) }
+                            } else {
+                                Button("GET") {
+                                    if let version = app.versions.first {
+                                        downloadIPA(version.downloadURL, isTrollAppsUpdate: false)
                                     }
                                 }
-                            } else {
-                                if #available(tvOS 15.0, *) {
-                                    Button("GET") {
-                                        if let firstVersion = app.versions.first {
-                                            print("CALLING DOWNLOADIPA AND SHOWING INIT ALERT")
-                                            downloadIPA(firstVersion.downloadURL, isTrollAppsUpdate: false)
-                                            showingAlert = true
-                                        }
-                                    }
-                                    .alert("Started download:" + app.name, isPresented: $showingAlert) {
-                                        Button("OK", role: .cancel) { }
-                                    }
-                                    .padding(.leading)
-                                } else {
-                                    Button("GET") {
-                                        if let firstVersion = app.versions.first {
-                                            print("CALLING DOWNLOADIPA AND SHOWING INIT ALERT")
-                                            downloadIPA(firstVersion.downloadURL, isTrollAppsUpdate: false)
-                                            downloadAlertMessage = "Started download: " + app.name
-                                            showingAlert = true
-                                        }
-                                    }
-                                    .alert(isPresented: $showingAlert) {
-                                        Alert(
-                                            title: Text(downloadAlertMessage),
-                                            message: Text("Please wait...")
-                                        )
-                                    }
+                                .disabled(transfer.isBusy)
+                                .padding(.leading)
+                            }
+                        } else if isNewVersionAvailable(for: app) {
+                            Button("UPDATE") {
+                                if let version = app.versions.first {
+                                    downloadIPA(version.downloadURL, isTrollAppsUpdate: true)
                                 }
                             }
-                        } else {    //  app IS trollapps
-                            if(isNewVersionAvailable(for: app)) {
-                                if #available(tvOS 15.0, *) {
-                                    Button("UPDATE") {
-                                        if let firstVersion = app.versions.first {
-                                            print("CALLING DOWNLOADIPA AND SHOWING INIT ALERT")
-                                            downloadIPA(firstVersion.downloadURL, isTrollAppsUpdate: true)
-                                            showingAlert = true
-                                        }
-                                    }
-                                    .alert("TrollApps will close. Please allow up to 20 seconds for the update to be applied.", isPresented: $showingAlert) {
-                                        Button("OK", role: .cancel) { }
-                                    }
-                                    .padding(.leading)
-                                } else {
-                                    Button("UPDATE") {
-                                        if let firstVersion = app.versions.first {
-                                            print("CALLING DOWNLOADIPA AND SHOWING INIT ALERT")
-                                            downloadIPA(firstVersion.downloadURL, isTrollAppsUpdate: true)
-                                            downloadAlertMessage = "TrollApps will close. Please allow up to 20 seconds for the update to be applied."
-                                            showingAlert = true
-                                        }
-                                    }
-                                    .alert(isPresented: $showingAlert) {
-                                        Alert(
-                                            title: Text(downloadAlertMessage),
-                                            message: Text("Please wait...")
-                                        )
-                                    }
-                                }
-                            } else {
-                                Button("OWNED") {}.disabled(true)
-                            }
+                            .disabled(transfer.isBusy)
+                            .padding(.leading)
+                        } else {
+                            Button("OWNED") {}.disabled(true)
                         }
-                        
-                        
+
                         VStack(alignment: .leading, spacing: 10) {
                             if #available(tvOS 15.0, *) {
                                 Text(app.localizedDescription)

@@ -1,74 +1,98 @@
-//
-//  DownloadManager.swift
-//  TrollApps // TrollAppsTV
-//
-//  Created by Cleopatra on 2023-12-17.
-//  Modified for tvOS by Bonnie on 2024-07-31
-//
-
+// Based on TrollAppsTV by TheResonanceTeam. Distributed under GPL-3.0.
 import SwiftUI
 
-class DownloadDelegate: NSObject, ObservableObject, URLSessionDownloadDelegate {
-    //var queueItem: QueueItem
-    var appUrl: String
-    var isTrollAppsUpdate: Bool
-    //var completion: (FunctionStatus) -> Void
-    //var queueManager: QueueManager
+struct TransferAlert: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+}
 
-    init(appUrl: String, isTrollAppsUpdate: Bool) {
-        //self.queueItem = queueItem
-        //self.completion = completion
-        //self.queueManager = queueManager
-        self.appUrl = appUrl
-        self.isTrollAppsUpdate = isTrollAppsUpdate
-    }
-    
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-        do {
-            print("ATTEMPTING TO DOWNLOAD .IPA FILE")
-            let destinationFolderURL = URL(fileURLWithPath: "/private/var/mobile/.TrollApps/tmp/")
-            let IPAPathURL = destinationFolderURL
-                //.appendingPathComponent(queueItem.id.uuidString)
-                .appendingPathExtension("install.ipa")
-            
-            try FileManager.default.createDirectory(at: destinationFolderURL, withIntermediateDirectories: true, attributes: nil)
+// Published state is only modified on the main queue.
+final class DownloadState: ObservableObject {
+    static let shared = DownloadState()
+    @Published var isBusy = false
+    @Published var status = ""
+    @Published var progress: Double?
+    @Published var alert: TransferAlert?
 
-            try FileManager.default.moveItem(at: location, to: URL(fileURLWithPath: IPAPathURL.path))
-            
-            print("ATTEMPTING TO INSTALL APP")
-            
-            InstallIPA(isTrollAppsUpdate: isTrollAppsUpdate)
-                        
-            DispatchQueue.main.async {
-                //self.queueManager.updateQueueItemProgress(itemID: self.queueItem.id, progress: 100)
-            }
-            //completion(FunctionStatus(error: false))
-        } catch {
-            print(error)
-            //completion(FunctionStatus(error: true, message: ErrorMessage(title: "ERROR_MOVING_IPA_FILE", body: error.localizedDescription)))
-        }
-    }
-    
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
-        let percentComplete = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
+    func finish(error: String? = nil) {
         DispatchQueue.main.async {
-            //self.queueManager.updateQueueItemProgress(itemID: self.queueItem.id, progress: percentComplete * 100)
+            self.isBusy = false
+            self.progress = nil
+            self.status = ""
+            self.alert = TransferAlert(title: error == nil ? "Installed" : "Installation failed",
+                                      message: error ?? "The app was installed successfully.")
         }
     }
 }
 
+final class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
+    let isTrollAppsUpdate: Bool
+    private var handledDownload = false
+
+    init(isTrollAppsUpdate: Bool) { self.isTrollAppsUpdate = isTrollAppsUpdate }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        handledDownload = true
+        defer { session.finishTasksAndInvalidate() }
+        guard let response = downloadTask.response as? HTTPURLResponse, (200...299).contains(response.statusCode) else {
+            let code = (downloadTask.response as? HTTPURLResponse)?.statusCode ?? 0
+            DownloadState.shared.finish(error: "The server returned HTTP \(code). Check the app's direct download URL.")
+            return
+        }
+        let folder = URL(fileURLWithPath: "/private/var/mobile/.TrollApps/tmp", isDirectory: true)
+        let ipa = folder.appendingPathComponent(UUID().uuidString).appendingPathExtension("ipa")
+        defer {
+            do {
+                if FileManager.default.fileExists(atPath: ipa.path) { try FileManager.default.removeItem(at: ipa) }
+            } catch { print("Could not remove temporary IPA: \(error)") }
+        }
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true, attributes: nil)
+            try FileManager.default.moveItem(at: location, to: ipa)
+            DispatchQueue.main.async {
+                DownloadState.shared.status = "Installing…"
+                DownloadState.shared.progress = nil
+            }
+            try InstallIPA(at: ipa, isTrollAppsUpdate: isTrollAppsUpdate)
+            DownloadState.shared.finish()
+        } catch {
+            print("Download/install failed: \(error)")
+            DownloadState.shared.finish(error: error.localizedDescription)
+        }
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
+                    didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        DispatchQueue.main.async {
+            DownloadState.shared.progress = totalBytesExpectedToWrite > 0
+                ? min(1, Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)) : nil
+            DownloadState.shared.status = "Downloading… \(ByteCountFormatter.string(fromByteCount: totalBytesWritten, countStyle: .file))"
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard !handledDownload else { return }
+        session.finishTasksAndInvalidate()
+        DownloadState.shared.finish(error: error?.localizedDescription ?? "The download ended without a file.")
+    }
+}
+
 func downloadIPA(_ appUrl: String, isTrollAppsUpdate: Bool) {
-    print("DOWNLOAD REQUEST STARTED")
-
-    let downloadDelegate = DownloadDelegate(appUrl: appUrl, isTrollAppsUpdate: isTrollAppsUpdate)
-
-    guard let url = URL(string: appUrl) else {
-        //completion(FunctionStatus(error: true, message: ErrorMessage(title: "INVALID_DOWNLOAD_URL", body: "LIKELY_A_REPO_ISSUE")))
+    let state = DownloadState.shared
+    guard !state.isBusy else { return }
+    guard let url = URL(string: appUrl), let scheme = url.scheme?.lowercased(), ["http", "https"].contains(scheme), url.host != nil else {
+        state.finish(error: "The repository contains an invalid download URL.")
         return
     }
-    
-    print("INITIATING DOWNLOAD TASK")
-
-    let downloadTask = URLSession(configuration: .default, delegate: downloadDelegate, delegateQueue: nil).downloadTask(with: url)
-    downloadTask.resume()
+    state.alert = nil
+    state.isBusy = true
+    state.status = "Starting download…"
+    state.progress = nil
+    let configuration = URLSessionConfiguration.default
+    configuration.timeoutIntervalForRequest = 60
+    configuration.timeoutIntervalForResource = 1800
+    let delegate = DownloadDelegate(isTrollAppsUpdate: isTrollAppsUpdate)
+    let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
+    session.downloadTask(with: url).resume()
 }

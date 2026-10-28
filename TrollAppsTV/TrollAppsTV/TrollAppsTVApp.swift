@@ -12,7 +12,7 @@ struct TrollAppsTVApp: SwiftUI.App {
     
     init() {
         clearTrollAppsFolder()
-        findAndSetTrollAppsTVVersion(version: "0.92")
+        findAndSetTrollAppsTVVersion(version: "0.92.1")
     }
     
     var body: some Scene {
