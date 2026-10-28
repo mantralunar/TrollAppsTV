@@ -1,0 +1,32 @@
+name: Build TrollAppsTV Lite fix
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Test installer discovery and errors
+        run: |
+          swiftc TrollAppsTV/TrollAppsTV/Managers/InstallManager.swift tests/InstallerTests.swift -o "$RUNNER_TEMP/installer-tests"
+          "$RUNNER_TEMP/installer-tests"
+      - name: Install entitlement-signing tool
+        run: brew install ldid
+      - name: Build and package IPA
+        run: bash TrollAppsTV/build.command
+      - name: Save installable files
+        uses: actions/upload-artifact@v4
+        with:
+          name: TrollAppsTV-Lite-Fix
+          path: |
+            TrollAppsTV/build/TrollAppsTV.ipa
+            TrollAppsTV/build/TrollAppsTV.tipa
+            TrollAppsTV/build/SHA256SUMS
+          if-no-files-found: error
