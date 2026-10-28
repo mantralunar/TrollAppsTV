@@ -17,6 +17,10 @@ jobs:
         run: |
           swiftc TrollAppsTV/TrollAppsTV/Managers/InstallManager.swift tests/InstallerTests.swift -o "$RUNNER_TEMP/installer-tests"
           "$RUNNER_TEMP/installer-tests"
+      - name: Test compatibility with unavailable tvOS spawn declarations
+        run: |
+          clang -Wall -Wextra -Werror tests/SpawnCompatTests.c -o "$RUNNER_TEMP/spawn-tests"
+          "$RUNNER_TEMP/spawn-tests"
       - name: Install entitlement-signing tool
         run: brew install ldid
       - name: Build and package IPA
