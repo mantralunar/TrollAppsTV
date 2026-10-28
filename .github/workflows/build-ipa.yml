@@ -28,7 +28,7 @@ jobs:
       - name: Save installable files
         uses: actions/upload-artifact@v4
         with:
-          name: TrollAppsTV-Lite-Fix
+          name: TrollAppsTV-Lite-Fix-2
           path: |
             TrollAppsTV/build/TrollAppsTV.ipa
             TrollAppsTV/build/TrollAppsTV.tipa

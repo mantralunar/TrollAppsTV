@@ -17,6 +17,17 @@ xcodebuild -project "$WORKING_LOCATION/$APPLICATION_NAME.xcodeproj" \
 APP_PATH="$BUILD_LOCATION/DerivedDataApp/Build/Products/Release-appletvos/$APPLICATION_NAME.app"
 # Refuse to package a partial build.
 test -x "$APP_PATH/$APPLICATION_NAME"
+python3 - "$APP_PATH/Info.plist" <<'PYBUILD'
+import plistlib, sys
+with open(sys.argv[1], 'rb') as stream:
+    info = plistlib.load(stream)
+if info.get('CFBundleShortVersionString') != '0.92.2':
+    raise SystemExit('Build identity mismatch: expected Lite Fix 2 / 0.92.2. Replace the complete source package.')
+info['TALiteFixBuild'] = 'Lite Fix 2'
+with open(sys.argv[1], 'wb') as stream:
+    plistlib.dump(info, stream)
+print('Verified built app identity: Lite Fix 2 / 0.92.2')
+PYBUILD
 STAGING_LOCATION="$(mktemp -d "$BUILD_LOCATION/package.XXXXXX")"
 trap 'rm -rf "$STAGING_LOCATION"' EXIT
 mkdir "$STAGING_LOCATION/Payload"

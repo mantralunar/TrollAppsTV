@@ -13,6 +13,12 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             Form {
+                Section(header: Text("Build")) {
+                    Text("TrollAppsTV Lite Fix 2 · 0.92.2")
+                    Text("TrollStore Lite detection, download progress and visible errors")
+                        .font(.footnote)
+                }
+
                 Section(footer: Text("Reset default sources if you deleted the original sources provided by TrollApps and wish to get them back.")) {
                     Button(action: {
                         if deleteDefaultSourcesFile() {

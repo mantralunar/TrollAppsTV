@@ -4,6 +4,14 @@ An unofficial patched source package based on [TheResonanceTeam/TrollAppsTV](htt
 
 The original app downloads an IPA but only searches container directories for `TrollStore.app`. This build also recognizes TrollStore Lite in `/Applications` and `/var/jb/Applications`.
 
+## Confirm that the patched app is running
+
+The patched app no longer displays the original **Started download** popup. It shows a download status/progress panel and a final success or failure alert instead.
+
+Use the **complete source package**, including `ContentView.swift`, `AppDetailView.swift` and the download/install managers. The earlier small Xcode build-fix ZIP only fixed compiler errors and did not contain all of the UI changes. Uploading that small ZIP over unpatched upstream source does not apply the full Lite fix.
+
+Close TrollAppsTV using the Apple TV app switcher before reinstalling, so an already running older process is not reused. After installing the new IPA, check **Settings → Build** for **TrollAppsTV Lite Fix 2 · 0.92.2**. If that label is absent, do not troubleshoot progress yet: the running screen is not from this source package.
+
 ## Build an IPA using GitHub
 
 You do not need Xcode on your own computer or an Apple developer account for this workflow. GitHub's macOS runner builds the app; it is packaged with the entitlements for installation through TrollStore Lite. Your account needs access to GitHub Actions macOS runners; usage may count against your plan.
@@ -11,7 +19,7 @@ You do not need Xcode on your own computer or an Apple developer account for thi
 1. Create a **separate** GitHub repository, for example `trollappstv-lite-fix`, with `main` as the default branch. Do not put these files into your IPA Shelf server repository.
 2. Extract this archive and put its contents at the repository root, including the hidden `.github` directory. Commit and push to `main`.
 3. Open **Actions → Build TrollAppsTV Lite fix**. The push starts a build, or use **Run workflow** on `main`.
-4. Wait for a green result. In that run's **Artifacts** section, download **TrollAppsTV-Lite-Fix**. You must be signed in to GitHub to download an Actions artifact.
+4. Wait for a green result. In that run's **Artifacts** section, download **TrollAppsTV-Lite-Fix-2**. You must be signed in to GitHub to download an Actions artifact.
 5. Extract the artifact. It contains `TrollAppsTV.ipa`, `TrollAppsTV.tipa` and `SHA256SUMS`. These are the built files; this source archive itself cannot be installed.
 
 No publishing token or signing certificate secret is required. The workflow does not create releases or publish anything to GHCR. If the build fails, share the first failing step and its error; a successful workflow run is required before there is an IPA to install.
@@ -33,7 +41,7 @@ echo "Exit code: $?"
 
 A successful installation normally returns `0`. Reopen TrollAppsTV and test one small app from your IPA Shelf tvOS source. Keep your current TrollAppsTV IPA as a rollback copy before updating.
 
-This patch retains the original bundle identifier (`org.resonance.tvstore`) so it replaces the existing app. It does not intentionally reset source configuration. Avoid installing the upstream TrollAppsTV update over this build, since that would remove the patch. The build version is `0.92.1`.
+This patch retains the original bundle identifier (`org.resonance.tvstore`) so it replaces the existing app. It does not intentionally reset source configuration. Avoid installing the upstream TrollAppsTV update over this build, since that would remove the patch. The build version is `0.92.2`. Settings must show **TrollAppsTV Lite Fix 2 · 0.92.2**; the home-screen display name is **TrollAppsTV Lite Fix**.
 
 ## Changes
 
