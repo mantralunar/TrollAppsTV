@@ -43,11 +43,13 @@ This patch retains the original bundle identifier (`org.resonance.tvstore`) so i
 - Displays download progress, installation state, HTTP/download errors and installer return codes.
 - Prevents overlapping downloads and closes for a self-update only after the helper reports success.
 - Reports helper termination by signal correctly.
+- Resolves process-launch functions at runtime so newer tvOS SDK availability annotations do not break compilation; reports an error if any required function is missing.
+- Makes the icon's back layers and top-shelf backgrounds fully opaque at build time, as required by the current asset compiler. Foreground and middle layers remain unchanged.
 - Includes a shared Xcode build scheme and fixes the upstream packaging script's `Cp` typo and signing cleanup.
 
 ## Checks and limits
 
-Local tests compile and exercise helper discovery for rootful Lite, rootless Lite and regular container installations, as well as install arguments, missing files and helper failures. Modified Swift files pass syntax parsing; the Xcode project, scheme, workflow YAML and shell script are checked for valid syntax.
+Local tests compile and exercise helper discovery for rootful Lite, rootless Lite and regular container installations, as well as install arguments, missing files and helper failures. Compatibility tests compile with the same process-launch functions explicitly marked unavailable, and check missing-symbol errors. The asset preparation tool verifies opaque output and unchanged dimensions. Modified Swift files pass syntax parsing; the Xcode project, scheme, workflow YAML and shell script are checked for valid syntax.
 
 A complete tvOS build and real Apple TV installation have **not** been verified in the authoring environment, which has Command Line Tools but no full Xcode/tvOS SDK. The included GitHub workflow performs the complete build. The patch retains upstream root-helper spawning: your jailbreak and installed entitlements must allow that operation. If it fails, the patched app should now show the helper's return code instead of silently stalling.
 

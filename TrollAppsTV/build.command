@@ -6,6 +6,8 @@ APPLICATION_NAME=TrollAppsTV
 BUILD_LOCATION="$WORKING_LOCATION/build"
 command -v ldid >/dev/null || { echo 'Install ldid first: brew install ldid' >&2; exit 1; }
 mkdir -p "$BUILD_LOCATION"
+swiftc "$WORKING_LOCATION/../scripts/PrepareAssets.swift" -parse-as-library -o "$BUILD_LOCATION/prepare-assets"
+"$BUILD_LOCATION/prepare-assets" "$WORKING_LOCATION/TrollAppsTV/Assets.xcassets"
 xcodebuild -project "$WORKING_LOCATION/$APPLICATION_NAME.xcodeproj" \
   -scheme "$APPLICATION_NAME" -configuration Release \
   -derivedDataPath "$BUILD_LOCATION/DerivedDataApp" \
