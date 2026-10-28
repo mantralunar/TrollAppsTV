@@ -2,9 +2,13 @@ name: Build TrollAppsTV Lite fix
 on:
   push:
     branches: [main]
+    tags: ['v*']
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: trollappstv-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   build:
     runs-on: macos-latest
@@ -25,6 +29,20 @@ jobs:
         run: brew install ldid
       - name: Build and package IPA
         run: bash TrollAppsTV/build.command
+      - name: Verify release tag matches the built app version
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PYVERSION'
+          import os, plistlib, zipfile
+          with zipfile.ZipFile('TrollAppsTV/build/TrollAppsTV.ipa') as archive:
+              info = plistlib.loads(archive.read('Payload/TrollAppsTV.app/Info.plist'))
+          expected = 'v' + info['CFBundleShortVersionString']
+          if os.environ['RELEASE_TAG'] != expected:
+              raise SystemExit(f"Release tag must match the built app version: expected {expected}")
+          print('Release tag verified:', expected)
+          PYVERSION
       - name: Save installable files
         uses: actions/upload-artifact@v4
         with:
@@ -34,3 +52,38 @@ jobs:
             TrollAppsTV/build/TrollAppsTV.tipa
             TrollAppsTV/build/SHA256SUMS
           if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Download the successful build
+        uses: actions/download-artifact@v4
+        with:
+          name: TrollAppsTV-Lite-Fix-2
+          path: release-assets
+      - name: Verify release checksums
+        working-directory: release-assets
+        run: sha256sum -c SHA256SUMS
+      - name: Create release and attach installable files
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=(release-assets/TrollAppsTV.ipa release-assets/TrollAppsTV.tipa release-assets/SHA256SUMS)
+          if gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --repo "$GH_REPO" --clobber
+          else
+            gh release create "$RELEASE_TAG" "${assets[@]}" \
+              --repo "$GH_REPO" --verify-tag \
+              --title "TrollAppsTV Lite Fix $RELEASE_TAG" --generate-notes
+          fi
